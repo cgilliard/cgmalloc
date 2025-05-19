@@ -7,4 +7,4 @@ all: cgmalloc.h
 test: cgmalloc.o test.c
 	$(CC) -lcriterion $(TEST_CFLAGS) -o test cgmalloc.o test.c
 clean:
-	rm -rf *.o test
+	rm -rf *.o test test.dSYM
