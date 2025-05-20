@@ -1,5 +1,5 @@
 *.o
-*.d
+*.so
 *.swp
 test.dSYM
 test

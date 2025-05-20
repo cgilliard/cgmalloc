@@ -23,9 +23,9 @@ test.o: test.c
 bench.o: bench.c
 	$(CC) $(BENCH_FLAGS) -c $< -o $@
 
-lib: libcgalloc.so
+lib: libcgmalloc.so
 
-libcgalloc.so: alloc.o lock.o
+libcgmalloc.so: alloc.o lock.o
 	$(CC) $(LDFLAGS) -shared -o $@ $^
 
 test: alloc.o lock.o test.o

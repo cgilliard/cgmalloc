@@ -12,10 +12,10 @@ int main() {
 	void *arr[size];
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	for (int i = 0; i < size; i++) {
-		arr[i] = cg_malloc(100);
+		arr[i] = malloc(100);
 	}
 	for (int i = 0; i < size; i++) {
-		cg_free(arr[i]);
+		free(arr[i]);
 	}
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	diff = (end.tv_sec - start.tv_sec) * 1000000000L +
