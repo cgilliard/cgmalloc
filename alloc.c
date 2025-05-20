@@ -67,10 +67,10 @@ typedef struct Chunk Chunk;
 
 typedef struct {
 	uint32_t slab_size;
+	uint32_t last_free;
 	struct Chunk *next;
 	struct Chunk *prev;
 	uint64_t magic;
-	uint32_t last_free;
 	Lock lock;
 } ChunkHeader;
 
