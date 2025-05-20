@@ -19,9 +19,9 @@
  */
 #define MAX_SLAB_SIZE 65536
 
-void *alloc(size_t size);
-void release(void *ptr);
-void *zeroed(size_t n, size_t size);
-void *resize(void *ptr, size_t size);
+void *cg_malloc(size_t size);
+void cg_free(void *ptr);
+void *cg_calloc(size_t n, size_t size);
+void *cg_realloc(void *ptr, size_t size);
 
 #endif /* _CG_MALLOC_H__ */

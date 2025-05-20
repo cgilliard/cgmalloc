@@ -250,7 +250,7 @@ static void free_slab(void *ptr) {
 	munmap(chunk, CHUNK_SIZE);
 }
 
-void *alloc(size_t size) {
+void *cg_malloc(size_t size) {
 	if (size < MAX_SLAB_SIZE) {
 		size_t slab_size = calculate_slab_size(size);
 		return alloc_slab(slab_size);
@@ -263,7 +263,7 @@ void *alloc(size_t size) {
 	}
 }
 
-void release(void *ptr) {
+void cg_free(void *ptr) {
 	void *aligned_ptr;
 	if (!ptr) return;
 	aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);

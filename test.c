@@ -4,17 +4,17 @@
 #include "alloc.h"
 
 Test(alloc, alloc1) {
-	char *test1 = alloc(1000 * 1000 * 5);
-	release(test1);
+	char *test1 = cg_malloc(1000 * 1000 * 5);
+	cg_free(test1);
 
-	void *a = alloc(10);
+	void *a = cg_malloc(10);
 
 	for (int i = 0; i < 1000; i++) {
-		char *test2 = alloc(10);
+		char *test2 = cg_malloc(10);
 		test2[0] = 'a';
 		test2[1] = 'b';
-		release(test2);
+		cg_free(test2);
 	}
 
-	release(a);
+	cg_free(a);
 }
