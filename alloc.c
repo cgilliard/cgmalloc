@@ -78,6 +78,7 @@ struct Chunk {
 	ChunkHeader header;
 };
 
+Lock __alloc_global_lock = LOCK_INIT;
 Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
 #define SET_BITMAP(chunk, index)                                               \
@@ -152,20 +153,28 @@ static void *alloc_slab(size_t slab_size) {
 	}
 	ptr = __alloc_head_ptrs[index];
 	if (!ptr) {
-		__alloc_head_ptrs[index] =
-		    alloc_aligned_memory(CHUNK_SIZE, CHUNK_SIZE);
-		ptr = __alloc_head_ptrs[index];
-		if (!ptr) return NULL;
-		memset(ptr, 0, sizeof(ChunkHeader) + BITMAP_SIZE(slab_size));
-		ptr->header.slab_size = slab_size;
-		ptr->header.next = ptr->header.prev = NULL;
-		ptr->header.magic = MAGIC_BYTES;
-		ptr->header.lock = LOCK_INIT;
-		SET_BITMAP(ptr, 0);
-		return BITMAP_PTR(ptr, 0, slab_size);
+		LockGuard lg __attribute__((unused)) =
+		    lock_write(&__alloc_global_lock);
+
+		if (!__alloc_head_ptrs[index]) {
+			__alloc_head_ptrs[index] =
+			    alloc_aligned_memory(CHUNK_SIZE, CHUNK_SIZE);
+			ptr = __alloc_head_ptrs[index];
+			if (!ptr) return NULL;
+			memset(ptr, 0,
+			       sizeof(ChunkHeader) + BITMAP_SIZE(slab_size));
+			ptr->header.slab_size = slab_size;
+			ptr->header.next = ptr->header.prev = NULL;
+			ptr->header.magic = MAGIC_BYTES;
+			ptr->header.lock = LOCK_INIT;
+			SET_BITMAP(ptr, 0);
+			return BITMAP_PTR(ptr, 0, slab_size);
+		}
 	}
 
 	while (ptr) {
+		LockGuard lg __attribute__((unused)) =
+		    lock_write(&ptr->header.lock);
 		size_t bit;
 		NEXT_FREE_BIT(ptr, max, bit);
 		if (bit == (size_t)-1) {
@@ -205,25 +214,40 @@ static void free_slab(void *ptr) {
 	chunk = (Chunk *)(((size_t)ptr / CHUNK_SIZE) * CHUNK_SIZE);
 	if (chunk->header.magic != MAGIC_BYTES)
 		panic("Memory corruption: MAGIC not correct. Halting!\n");
-	index = BITMAP_INDEX(ptr, chunk);
-	chunk->header.last_free = index / (sizeof(uint64_t) * 8);
-	UNSET_BITMAP(chunk, index);
 
-	size = BITMAP_SIZE(chunk->header.slab_size);
-	bitmap = (unsigned char *)((size_t)chunk + sizeof(ChunkHeader));
-	bitmap64 = (uint64_t *)((unsigned char *)(chunk) + sizeof(ChunkHeader));
+	{
+		LockGuard lg __attribute__((unused)) =
+		    lock_write(&chunk->header.lock);
 
-	if (bitmap64[chunk->header.last_free]) return;
-	while (i < size)
-		if (bitmap[i++]) return;
+		index = BITMAP_INDEX(ptr, chunk);
+		chunk->header.last_free = index / (sizeof(uint64_t) * 8);
+		UNSET_BITMAP(chunk, index);
 
-	chunk_index = SLAB_INDEX(chunk->header.slab_size);
-	if (__alloc_head_ptrs[chunk_index] == chunk)
-		__alloc_head_ptrs[chunk_index] = chunk->header.next;
-	if (chunk->header.next)
-		chunk->header.next->header.prev = chunk->header.prev;
-	if (chunk->header.prev)
-		chunk->header.prev->header.next = chunk->header.next;
+		size = BITMAP_SIZE(chunk->header.slab_size);
+		bitmap = (unsigned char *)((size_t)chunk + sizeof(ChunkHeader));
+		bitmap64 = (uint64_t *)((unsigned char *)(chunk) +
+					sizeof(ChunkHeader));
+
+		if (bitmap64[chunk->header.last_free]) return;
+		while (i < size)
+			if (bitmap[i++]) return;
+
+		chunk_index = SLAB_INDEX(chunk->header.slab_size);
+
+		{
+			LockGuard globallg __attribute__((unused)) =
+			    lock_write(&__alloc_global_lock);
+			if (__alloc_head_ptrs[chunk_index] == chunk)
+				__alloc_head_ptrs[chunk_index] =
+				    chunk->header.next;
+			if (chunk->header.next)
+				chunk->header.next->header.prev =
+				    chunk->header.prev;
+			if (chunk->header.prev)
+				chunk->header.prev->header.next =
+				    chunk->header.next;
+		}
+	}
 
 	munmap(chunk, CHUNK_SIZE);
 }

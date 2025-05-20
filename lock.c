@@ -8,6 +8,7 @@
 void lock_init(Lock *lock) { *lock = 0; }
 
 void lockguard_cleanup(LockGuardImpl *lg) {
+	if (!lg->lock) return;
 	if (lg->is_write) {
 		__atomic_store_n(lg->lock, 0, __ATOMIC_RELEASE);
 	} else {
