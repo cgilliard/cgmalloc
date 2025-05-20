@@ -161,3 +161,29 @@ $ nm lib/libcgmalloc.so  | grep -E "malloc|calloc|realloc|free"
 0000000000001940 T malloc
 00000000000019c0 T realloc
 ```
+
+# Lock
+
+In addition to the memory allocation functions, the library includes a spin lock. This spin lock is used in the memory allocation code, but it also might be useful independently. The usage is simple:
+
+```
+Lock l = LOCK_INIT;
+{
+    Lockguard lg = lock_read(&l);
+    // lock remains until lg goes out of scope (read - multiple readers)
+}
+
+{
+    LockGuard lg = lock_write(&l);
+    // lock remains until lg goes out of scope (write = single writers)
+}
+```
+
+This is implemented by defining LockGuard to:
+
+```
+#define LockGuard \
+        LockGuardImpl __attribute__((unused, cleanup(lockguard_cleanup)))
+```
+
+where LockGuardImpl is a type that stores a reference to the lock and unlocks it when it goes out of scope.

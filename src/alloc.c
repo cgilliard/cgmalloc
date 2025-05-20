@@ -184,6 +184,8 @@ STATIC void *alloc_slab(size_t slab_size) {
 	size_t max = BITMAP_CAPACITY(slab_size);
 	size_t index = SLAB_INDEX(slab_size);
 	ptr = __alloc_head_ptrs[index];
+
+	/* No slabs of this size yet */
 	if (!ptr) {
 #ifndef NO_SPIN_LOCKS
 		LockGuard lg = lock_write(&__alloc_global_lock);
@@ -209,6 +211,7 @@ STATIC void *alloc_slab(size_t slab_size) {
 		}
 	}
 
+	/* Iterate throught the existing chunks */
 	while (ptr) {
 #ifndef NO_SPIN_LOCKS
 		LockGuard lg = lock_write(&ptr->header.lock);
