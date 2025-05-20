@@ -125,8 +125,6 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
-	*(uint64_t *)aligned_ptr = size;
-	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
 	return aligned_ptr;
 }
 
@@ -260,8 +258,12 @@ void *cg_malloc(size_t size) {
 		ptr = alloc_aligned_memory(aligned_size, CHUNK_SIZE);
 		if (!ptr)
 			return NULL;
-		else
+		else {
+			*(uint64_t *)ptr = size;
+			*(uint64_t *)((size_t)ptr + sizeof(uint64_t)) =
+			    MAGIC_BYTES;
 			return (void *)((size_t)ptr + HEADER_SIZE);
+		}
 	}
 }
 
