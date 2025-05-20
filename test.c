@@ -11,7 +11,8 @@ Test(alloc, alloc1) {
 
 	for (int i = 0; i < 1000; i++) {
 		char *test2 = alloc(10);
-		printf("i=%i,test2=%lu\n", i, (size_t)test2);
+		test2[0] = 'a';
+		test2[1] = 'b';
 		release(test2);
 	}
 

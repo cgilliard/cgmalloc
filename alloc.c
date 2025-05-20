@@ -115,28 +115,30 @@ Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 #define SLAB_INDEX(slab_size) \
 	(((sizeof(size_t) * 8 - 1) - __builtin_clzl(slab_size)) - 3)
 
-#define NEXT_FREE_BIT(chunk, max, result)                                  \
-	do {                                                               \
-		(result) = (size_t) - 1;                                   \
-		if ((chunk) != NULL && (max) > 0) {                        \
-			uint64_t *bitmap =                                 \
-			    (uint64_t *)((unsigned char *)(chunk) +        \
-					 sizeof(ChunkHeader));             \
-			size_t max_words = ((max) + 63) >> 6;              \
-			size_t i;                                          \
-			for (i = 0; i < max_words; i++) {                  \
-				if (bitmap[i] != 0xFFFFFFFFFFFFFFFF) {     \
-					uint64_t word = bitmap[i];         \
-					size_t bit_value =                 \
-					    __builtin_ctzll(~word);        \
-					size_t index = i * 64 + bit_value; \
-					if (index < max) {                 \
-						(result) = index;          \
-						break;                     \
-					}                                  \
-				}                                          \
-			}                                                  \
-		}                                                          \
+#define NEXT_FREE_BIT(chunk, max, result)                                    \
+	do {                                                                 \
+		(result) = (size_t) - 1;                                     \
+		if ((chunk) != NULL && (max) > 0) {                          \
+			uint64_t *bitmap =                                   \
+			    (uint64_t *)((unsigned char *)(chunk) +          \
+					 sizeof(ChunkHeader));               \
+			size_t max_words = ((max) + 63) >> 6;                \
+			size_t i;                                            \
+			for (i = chunk->header.last_free; i < max_words;     \
+			     i++) {                                          \
+				if (bitmap[i] != 0xFFFFFFFFFFFFFFFF) {       \
+					uint64_t word = bitmap[i];           \
+					size_t bit_value =                   \
+					    __builtin_ctzll(~word);          \
+					size_t index = i * 64 + bit_value;   \
+					if (index < max) {                   \
+						chunk->header.last_free = i; \
+						(result) = index;            \
+						break;                       \
+					}                                    \
+				}                                            \
+			}                                                    \
+		}                                                            \
 	} while (0)
 
 static void *alloc_slab(size_t slab_size) {
@@ -193,6 +195,7 @@ static void *alloc_slab(size_t slab_size) {
 
 static void free_slab(void *ptr) {
 	Chunk *chunk;
+	uint64_t *bitmap64;
 	unsigned char *bitmap;
 	size_t index, size, chunk_index, i = 0;
 
@@ -200,10 +203,14 @@ static void free_slab(void *ptr) {
 	if (chunk->header.magic != MAGIC_BYTES)
 		panic("Memory corruption: MAGIC not correct. Halting!\n");
 	index = BITMAP_INDEX(ptr, chunk);
+	chunk->header.last_free = index / (sizeof(uint64_t) * 8);
 	UNSET_BITMAP(chunk, index);
 
 	size = BITMAP_SIZE(chunk->header.slab_size);
 	bitmap = (unsigned char *)((size_t)chunk + sizeof(ChunkHeader));
+	bitmap64 = (uint64_t *)((unsigned char *)(chunk) + sizeof(ChunkHeader));
+
+	if (bitmap64[chunk->header.last_free]) return;
 	while (i < size)
 		if (bitmap[i++]) return;
 
