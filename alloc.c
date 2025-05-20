@@ -90,7 +90,7 @@ static void panic(const char *msg) {
 
 static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
-	size_t prefix_size, actual_size, suffix_size, alloc_size;
+	size_t prefix_size, suffix_size, alloc_size;
 
 	if (size < alignment)
 		alloc_size = alignment * 2;
@@ -110,8 +110,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
-	actual_size = (size * 2) - prefix_size;
-	*(uint64_t *)aligned_ptr = actual_size;
+	*(uint64_t *)aligned_ptr = size;
 	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
 	return aligned_ptr;
 }
@@ -255,15 +254,23 @@ static void free_slab(void *ptr) {
 	munmap(chunk, CHUNK_SIZE);
 }
 void *cg_malloc(size_t size) {
+	if (size > SIZE_MAX - HEADER_SIZE) {
+		errno = EINVAL;
+		return NULL;
+	};
 	if (size < MAX_SLAB_SIZE) {
 		size_t slab_size = calculate_slab_size(size);
 		return alloc_slab(slab_size);
 	} else {
 		void *ptr;
 		size_t aligned_size =
-		    ((size + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+		    (((HEADER_SIZE + size) + PAGE_SIZE - 1) / PAGE_SIZE) *
+		    PAGE_SIZE;
 		ptr = alloc_aligned_memory(aligned_size, CHUNK_SIZE);
-		return (void *)((size_t)ptr + HEADER_SIZE);
+		if (!ptr)
+			return NULL;
+		else
+			return (void *)((size_t)ptr + HEADER_SIZE);
 	}
 }
 
