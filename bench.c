@@ -34,7 +34,7 @@ int main() {
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	diff = (end.tv_sec - start.tv_sec) * 1000000000L +
 	       (end.tv_nsec - start.tv_nsec);
-	printf("cm_malloc diff=%ld (%fns per iteration)\n", diff,
+	printf("cc_malloc diff=%ld (%fns per iteration)\n", diff,
 	       ((double)diff / (double)size));
 
 	return 0;
