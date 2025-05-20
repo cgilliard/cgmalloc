@@ -1,16 +1,41 @@
-CC=clang
-CFLAGS=-std=c89 -O3 -pedantic -Wall -Wextra -D_GNU_SOURCE
-TEST_CFLAGS=-g
-BENCH_FLAGS=-O3 -flto
+# Compiler and flags
+CC = clang
+CFLAGS = -std=c89 -pedantic -Wall -Wextra -O3
+TEST_CFLAGS = -g
+BENCH_FLAGS = -O3 -flto
+LDFLAGS = -lcriterion
 
-all: alloc lock
-alloc: alloc.h
-	$(CC) $(CFLAGS) -c alloc.c
-lock: lock.h
-	$(CC) $(CFLAGS) -c lock.c
-test: all test.c
-	$(CC) -lcriterion $(TEST_CFLAGS) -o test alloc.o test.c
-bench: all bench.c
-	$(CC) $(BENCH_FLAGS) -o bench alloc.o bench.c
+# Source and object files
+SRCS = alloc.c lock.c test.c bench.c
+OBJS = alloc.o lock.o test.o bench.o
+DEPS = $(SRCS:.c=.d)
+
+all: test bench
+
+alloc.o: alloc.c alloc.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+lock.o: lock.c lock.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+test.o: test.c
+	$(CC) $(TEST_CFLAGS) -c $< -o $@
+
+bench.o: bench.c
+	$(CC) $(BENCH_FLAGS) -c $< -o $@
+
+test: alloc.o lock.o test.o
+	$(CC) $(TEST_CFLAGS) -o $@ $^ $(LDFLAGS)
+
+bench: alloc.o lock.o bench.o
+	$(CC) $(BENCH_FLAGS) -o $@ $^
+
+%.d: %.c
+	$(CC) $(CFLAGS) -M $< > $@
+
+-include $(DEPS)
+
 clean:
-	rm -rf *.o test test.dSYM bench
+	rm -rf *.o *.d test test.dSYM bench
+
+.PHONY: all clean

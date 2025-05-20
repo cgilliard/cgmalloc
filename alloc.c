@@ -71,6 +71,7 @@ typedef struct {
 	struct Chunk *prev;
 	uint64_t magic;
 	uint32_t last_free;
+	Lock lock;
 } ChunkHeader;
 
 struct Chunk {
@@ -159,6 +160,7 @@ static void *alloc_slab(size_t slab_size) {
 		ptr->header.slab_size = slab_size;
 		ptr->header.next = ptr->header.prev = NULL;
 		ptr->header.magic = MAGIC_BYTES;
+		ptr->header.lock = LOCK_INIT;
 		SET_BITMAP(ptr, 0);
 		return BITMAP_PTR(ptr, 0, slab_size);
 	}
@@ -183,6 +185,7 @@ static void *alloc_slab(size_t slab_size) {
 				tmp->header.next = NULL;
 				tmp->header.slab_size = slab_size;
 				tmp->header.magic = MAGIC_BYTES;
+				tmp->header.lock = LOCK_INIT;
 				ptr = tmp;
 			}
 			continue;
