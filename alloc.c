@@ -48,7 +48,6 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	actual_size = (size * 2) - prefix_size;
 	*(uint64_t *)aligned_ptr = actual_size;
 	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
-
 	return aligned_ptr;
 }
 
@@ -71,6 +70,7 @@ typedef struct {
 	struct Chunk *next;
 	struct Chunk *prev;
 	uint64_t magic;
+	uint32_t last_free;
 } ChunkHeader;
 
 struct Chunk {
@@ -115,37 +115,29 @@ Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 #define SLAB_INDEX(slab_size) \
 	(((sizeof(size_t) * 8 - 1) - __builtin_clzl(slab_size)) - 3)
 
-#define NEXT_FREE_BIT(chunk, max, result)                                     \
-	do {                                                                  \
-		(result) = (size_t) - 1;                                      \
-		if ((chunk) != NULL && (max) > 0) {                           \
-			unsigned char *__bitmap =                             \
-			    (unsigned char *)(chunk) + sizeof(ChunkHeader);   \
-			size_t __max_bytes =                                  \
-			    ((max) + 7) >> 3; /* Ceiling of max/8 */          \
-			size_t __byte;                                        \
-			for (__byte = 0;                                      \
-			     __byte < __max_bytes && __byte * 8 < (max);      \
-			     __byte++) {                                      \
-				if (__bitmap[__byte] != 0xFF) {               \
-					unsigned char __b = __bitmap[__byte]; \
-					size_t __bit;                         \
-					for (__bit = 0;                       \
-					     __bit < 8 &&                     \
-					     __byte * 8 + __bit < (max);      \
-					     __bit++) {                       \
-						if (!(__b & (1U << __bit))) { \
-							(result) =            \
-							    __byte * 8 +      \
-							    __bit;            \
-							break;                \
-						}                             \
-					}                                     \
-					if ((result) != (size_t) - 1) break;  \
-				}                                             \
-			}                                                     \
-		}                                                             \
-	} while (FALSE)
+#define NEXT_FREE_BIT(chunk, max, result)                                  \
+	do {                                                               \
+		(result) = (size_t) - 1;                                   \
+		if ((chunk) != NULL && (max) > 0) {                        \
+			uint64_t *bitmap =                                 \
+			    (uint64_t *)((unsigned char *)(chunk) +        \
+					 sizeof(ChunkHeader));             \
+			size_t max_words = ((max) + 63) >> 6;              \
+			size_t i;                                          \
+			for (i = 0; i < max_words; i++) {                  \
+				if (bitmap[i] != ~0ULL) {                  \
+					uint64_t word = bitmap[i];         \
+					size_t bit_value =                 \
+					    __builtin_ctzll(~word);        \
+					size_t index = i * 64 + bit_value; \
+					if (index < max) {                 \
+						(result) = index;          \
+						break;                     \
+					}                                  \
+				}                                          \
+			}                                                  \
+		}                                                          \
+	} while (0)
 
 static void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;
