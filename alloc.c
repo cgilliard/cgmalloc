@@ -83,6 +83,24 @@
 		}                                                            \
 	} while (0)
 
+typedef struct Chunk Chunk;
+
+typedef struct {
+	uint32_t slab_size;
+	uint32_t last_free;
+	struct Chunk *next;
+	struct Chunk *prev;
+	uint64_t magic;
+	Lock lock;
+} ChunkHeader;
+
+struct Chunk {
+	ChunkHeader header;
+};
+
+Lock __alloc_global_lock = LOCK_INIT;
+Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
+
 static void panic(const char *msg) {
 	write(2, msg, strlen(msg));
 	exit(-1);
@@ -116,34 +134,11 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 }
 
 static size_t calculate_slab_size(size_t value) {
+	int leading_zeros;
 	if (value <= 8) return 8;
-	value--;
-	value |= value >> 1;
-	value |= value >> 2;
-	value |= value >> 4;
-	value |= value >> 8;
-	value |= value >> 16;
-	if (sizeof(size_t) > 4) value |= value >> 32;
-	return value + 1;
+	leading_zeros = __builtin_clzll(value - 1);
+	return 1UL << (64 - leading_zeros);
 }
-
-typedef struct Chunk Chunk;
-
-typedef struct {
-	uint32_t slab_size;
-	uint32_t last_free;
-	struct Chunk *next;
-	struct Chunk *prev;
-	uint64_t magic;
-	Lock lock;
-} ChunkHeader;
-
-struct Chunk {
-	ChunkHeader header;
-};
-
-Lock __alloc_global_lock = LOCK_INIT;
-Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
 static void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;

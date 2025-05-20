@@ -33,7 +33,10 @@ LockGuardImpl lock_read(Lock *lock) {
 LockGuardImpl lock_write(Lock *lock) {
 	uint64_t state, desired;
 	LockGuardImpl ret;
+	int first = 1;
 	do {
+		if (!first) sched_yield();
+		first = 0;
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE) &
 			~(WFLAG | WREQUEST);
 		desired = state | WREQUEST;
