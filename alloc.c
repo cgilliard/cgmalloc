@@ -1,3 +1,5 @@
+/* For linux MAP_ANONYMOUS */
+#define _GNU_SOURCE
 #include "alloc.h"
 
 /* For mmap/munmap */
@@ -10,6 +12,8 @@
 #include <errno.h>
 /* For memset, strlen */
 #include <string.h>
+/* For uint64_t */
+#include <stdint.h>
 
 #define HEADER_SIZE 16
 #define MAGIC_BYTES 0xAF8BC894322377BCL
