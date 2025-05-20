@@ -1,5 +1,32 @@
+/********************************************************************************
+ * MIT License
+ *
+ * Copyright (c) 2025 Christopher Gilliard
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ *******************************************************************************/
+
 #include <alloc.h>
+#ifndef NO_SPIN_LOCKS
 #include <lock.h>
+#endif /* NO_SPIN_LOCKS */
 
 /* For mmap/munmap */
 #include <sys/mman.h>
@@ -18,7 +45,7 @@
 #define MAGIC_BYTES 0xAF8BC894322377BCL
 #define TRUE 1
 #define FALSE 0
-#define MAX_SLAB_PTRS 32
+#define MAX_SLAB_PTRS 64
 
 #ifndef TEST
 #define STATIC static
@@ -96,14 +123,19 @@ typedef struct {
 	struct Chunk *next;
 	struct Chunk *prev;
 	uint64_t magic;
+#ifndef NO_SPIN_LOCKS
 	Lock lock;
+#endif /* NO_SPIN_LOCKS */
 } ChunkHeader;
 
 struct Chunk {
 	ChunkHeader header;
 };
 
+#ifndef NO_SPIN_LOCKS
 Lock __alloc_global_lock = LOCK_INIT;
+#endif /* NO_SPIN_LOCKS */
+
 Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
 STATIC void panic(const char *msg) {
@@ -134,25 +166,18 @@ STATIC void *alloc_aligned_memory(size_t size, size_t alignment) {
 }
 
 STATIC size_t calculate_slab_size(size_t value) {
-	int leading_zeros;
 	if (value <= 8) return 8;
-	leading_zeros = __builtin_clzll(value - 1);
-	return 1UL << (64 - leading_zeros);
+	return 1UL << (64 - __builtin_clzll(value - 1));
 }
 
 STATIC void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;
 	size_t max = BITMAP_CAPACITY(slab_size);
 	size_t index = SLAB_INDEX(slab_size);
-	if (index >= MAX_SLAB_PTRS || max == 0) {
-		errno = EINVAL;
-		return NULL;
-	}
 	ptr = __alloc_head_ptrs[index];
 	if (!ptr) {
 #ifndef NO_SPIN_LOCKS
-		LockGuard lg __attribute__((unused)) =
-		    lock_write(&__alloc_global_lock);
+		LockGuard lg = lock_write(&__alloc_global_lock);
 #endif /* NO_SPIN_LOCKS */
 
 		if (!__alloc_head_ptrs[index]) {
@@ -165,7 +190,10 @@ STATIC void *alloc_slab(size_t slab_size) {
 			ptr->header.slab_size = slab_size;
 			ptr->header.next = ptr->header.prev = NULL;
 			ptr->header.magic = MAGIC_BYTES;
+#ifndef NO_SPIN_LOCKS
 			ptr->header.lock = LOCK_INIT;
+#endif /* NO_SPIN_LOCKS */
+
 			SET_BITMAP(ptr, 0);
 			return BITMAP_PTR(ptr, 0, slab_size);
 		}
@@ -173,8 +201,7 @@ STATIC void *alloc_slab(size_t slab_size) {
 
 	while (ptr) {
 #ifndef NO_SPIN_LOCKS
-		LockGuard lg __attribute__((unused)) =
-		    lock_write(&ptr->header.lock);
+		LockGuard lg = lock_write(&ptr->header.lock);
 #endif /* NO_SPIN_LOCKS */
 		size_t bit;
 		NEXT_FREE_BIT(ptr, max, bit);
@@ -195,7 +222,9 @@ STATIC void *alloc_slab(size_t slab_size) {
 				tmp->header.next = NULL;
 				tmp->header.slab_size = slab_size;
 				tmp->header.magic = MAGIC_BYTES;
+#ifndef NO_SPIN_LOCKS
 				tmp->header.lock = LOCK_INIT;
+#endif /* NO_SPIN_LOCKS */
 				ptr = tmp;
 			}
 			continue;
@@ -218,8 +247,7 @@ STATIC void free_slab(void *ptr) {
 
 	{
 #ifndef NO_SPIN_LOCKS
-		LockGuard lg __attribute__((unused)) =
-		    lock_write(&chunk->header.lock);
+		LockGuard lg = lock_write(&chunk->header.lock);
 #endif /* NO_SPIN_LOCKS */
 
 		index = BITMAP_INDEX(ptr, chunk);
@@ -239,8 +267,7 @@ STATIC void free_slab(void *ptr) {
 
 		{
 #ifndef NO_SPIN_LOCKS
-			LockGuard globallg __attribute__((unused)) =
-			    lock_write(&__alloc_global_lock);
+			LockGuard globallg = lock_write(&__alloc_global_lock);
 #endif /* NO_SPIN_LOCKS */
 			if (__alloc_head_ptrs[chunk_index] == chunk)
 				__alloc_head_ptrs[chunk_index] =
