@@ -1,11 +1,9 @@
-# Compiler and flags
 CC = clang
 CFLAGS = -std=c89 -pedantic -Wall -Wextra -O3
 TEST_CFLAGS = -g
 BENCH_FLAGS = -O3 -flto
 LDFLAGS = -lcriterion
 
-# Source and object files
 SRCS = alloc.c lock.c test.c bench.c
 OBJS = alloc.o lock.o test.o bench.o
 DEPS = $(SRCS:.c=.d)
