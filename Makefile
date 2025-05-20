@@ -36,8 +36,6 @@ bench: alloc.o lock.o bench.o
 
 install:
 	sudo cp libcgmalloc.so /usr/local/lib/
-	sudo cp alloc.h /usr/local/include/cgmalloc.h
-	sudo ldconfig
 
 # Prevent automatic dependency generation from triggering builds
 %.d: %.c
