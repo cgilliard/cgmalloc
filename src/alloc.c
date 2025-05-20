@@ -301,7 +301,7 @@ void *cg_malloc(size_t size) {
 		if (!ptr)
 			return NULL;
 		else {
-			*(uint64_t *)ptr = size;
+			*(uint64_t *)ptr = aligned_size;
 			*(uint64_t *)((size_t)ptr + sizeof(uint64_t)) =
 			    MAGIC_BYTES;
 			return (void *)((size_t)ptr + HEADER_SIZE);
