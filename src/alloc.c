@@ -145,21 +145,27 @@ STATIC void panic(const char *msg) {
 	exit(-1);
 }
 
+/* Return an aligned memory location using specified alignment. */
 STATIC void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
 	size_t prefix_size, suffix_size, alloc_size;
 
 	alloc_size = size + alignment;
 
+	/* Call mmap with a large enough allocation so we can align properly. */
 	base = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
 		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (base == MAP_FAILED) return NULL;
 
+	/* Align the pointer */
 	aligned_ptr =
 	    (void *)(((size_t)base + alignment - 1) & ~(alignment - 1));
+
+	/* Unmap prefix pages */
 	prefix_size = (size_t)aligned_ptr - (size_t)base;
 	if (prefix_size) munmap(base, prefix_size);
 
+	/* Unmap suffix pages */
 	suffix_size = alloc_size - (prefix_size + size);
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
@@ -167,6 +173,7 @@ STATIC void *alloc_aligned_memory(size_t size, size_t alignment) {
 	return aligned_ptr;
 }
 
+/* Calculate slab size based on requested size */
 STATIC size_t calculate_slab_size(size_t value) {
 	if (value <= 8) return 8;
 	return 1UL << (64 - __builtin_clzll(value - 1));
@@ -182,6 +189,7 @@ STATIC void *alloc_slab(size_t slab_size) {
 		LockGuard lg = lock_write(&__alloc_global_lock);
 #endif /* NO_SPIN_LOCKS */
 
+		/* Check that the pointer is still NULL under lock */
 		if (!__alloc_head_ptrs[index]) {
 			__alloc_head_ptrs[index] =
 			    alloc_aligned_memory(CHUNK_SIZE, CHUNK_SIZE);
@@ -231,6 +239,7 @@ STATIC void *alloc_slab(size_t slab_size) {
 			}
 			continue;
 		}
+		/* We found a bit set it and return the pointer */
 		SET_BITMAP(ptr, bit);
 		return BITMAP_PTR(ptr, bit, slab_size);
 	}
@@ -243,6 +252,8 @@ STATIC void free_slab(void *ptr) {
 	unsigned char *bitmap;
 	size_t index, size, chunk_index, i = 0;
 
+	/* Align to chunk header using the property that all Chunks are aligned
+	 * to CHUNK_SIZE boundries */
 	chunk = (Chunk *)(((size_t)ptr / CHUNK_SIZE) * CHUNK_SIZE);
 	if (chunk->header.magic != MAGIC_BYTES)
 		panic("Memory corruption: MAGIC not correct. Halting!\n");
@@ -283,8 +294,10 @@ STATIC void free_slab(void *ptr) {
 		}
 	}
 
+	/* Finally, there are no more bits here, free the chunk */
 	munmap(chunk, CHUNK_SIZE);
 }
+
 void *cg_malloc(size_t size) {
 	if (size > SIZE_MAX - HEADER_SIZE) {
 		errno = EINVAL;
@@ -298,7 +311,7 @@ void *cg_malloc(size_t size) {
 		    (((HEADER_SIZE + size) + PAGE_SIZE - 1) / PAGE_SIZE) *
 		    PAGE_SIZE;
 		ptr = alloc_aligned_memory(aligned_size, CHUNK_SIZE);
-		if (!ptr)
+		if (!ptr) /* Could not allocate memory mmap will set errno */
 			return NULL;
 		else {
 			*(uint64_t *)ptr = aligned_size;
@@ -337,7 +350,8 @@ void *cg_calloc(size_t n, size_t size) {
 	total_size = n * size;
 	ptr = cg_malloc(total_size);
 	if (ptr == NULL) return NULL;
-	/* for larger allocations, we use mmap directly which already zeros. */
+	/* Memset is not needed for larger allocations because we use mmap.
+	 * It's only needed for slabs. */
 	if (total_size <= MAX_SLAB_SIZE) memset(ptr, 0, total_size);
 	return ptr;
 }
@@ -350,24 +364,20 @@ void *cg_realloc(void *ptr, size_t size) {
 	size_t copy_size;
 	int is_mmap;
 
-	/* Case 1: ptr is NULL, behave like malloc */
 	if (ptr == NULL) {
 		return cg_malloc(size);
 	}
 
-	/* Case 2: size is 0, behave like free */
 	if (size == 0) {
 		cg_free(ptr);
 		return NULL;
 	}
 
-	/* Case 3: Check for invalid size */
-	if (size > (size_t)-1 - HEADER_SIZE) { /* SIZE_MAX not in C89 */
+	if (size > (size_t)-1 - HEADER_SIZE) {
 		errno = ENOMEM;
 		return NULL;
 	}
 
-	/* Case 4: Get old allocation details */
 	is_mmap = 0;
 	old_size = 0;
 	aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);
@@ -388,16 +398,15 @@ void *cg_realloc(void *ptr, size_t size) {
 		old_size = chunk->header.slab_size;
 	}
 
-	/* Case 5: Shrink within same allocator type, reuse ptr */
+	/* Shrink within same allocator type, reuse ptr */
 	if (size <= old_size) {
 		if ((size <= MAX_SLAB_SIZE && !is_mmap) ||
 		    (size > MAX_SLAB_SIZE && is_mmap)) {
-			/* No size update needed for slabs (fixed slot size) */
 			return ptr;
 		}
 	}
 
-	/* Case 6: Allocate new memory */
+	/* Allocate new memory */
 	new_ptr = cg_malloc(size);
 	if (new_ptr == NULL) {
 		errno = ENOMEM;

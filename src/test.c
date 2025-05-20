@@ -198,3 +198,52 @@ Test(alloc, larger_allocations) {
 		cg_free(ptr);
 	}
 }
+
+Test(alloc, test_realloc) {
+	void *tmp;
+
+	void *slab1 = cg_malloc(8);
+	void *slab2 = cg_malloc(16);
+	void *slab3 = cg_malloc(32);
+	void *slab4 = cg_malloc(64);
+	void *slab5 = cg_malloc(128);
+
+	tmp = cg_realloc(slab1, 16);
+	cr_assert_eq((size_t)tmp, (size_t)slab2 + 16);
+	slab1 = tmp;
+
+	tmp = cg_realloc(slab1, 32);
+	cr_assert_eq((size_t)tmp, (size_t)slab3 + 32);
+	slab1 = tmp;
+
+	tmp = cg_realloc(slab1, 64);
+	cr_assert_eq((size_t)tmp, (size_t)slab4 + 64);
+	slab1 = tmp;
+
+	tmp = cg_realloc(slab1, 128);
+	cr_assert_eq((size_t)tmp, (size_t)slab5 + 128);
+	slab1 = tmp;
+
+	tmp = cg_realloc(slab1, 1024 * 1024 * 6);
+	/* Should be a CHUNK_SIZE aligned + 16 pointer */
+	cr_assert_eq(((size_t)tmp - 16) % CHUNK_SIZE, 0);
+	slab1 = tmp;
+
+	/* now go down */
+	tmp = cg_realloc(slab1, 16);
+	cr_assert_eq((size_t)tmp, (size_t)slab2 + 16);
+	slab1 = tmp;
+
+	cg_free(slab1);
+	cg_free(slab2);
+	cg_free(slab3);
+	cg_free(slab4);
+	cg_free(slab5);
+}
+
+Test(alloc, test_calloc) {
+	unsigned char *tmp;
+	tmp = cg_calloc(10, 10);
+	for (int i = 0; i < 100; i++) cr_assert_eq(tmp[i], 0);
+	cg_free(tmp);
+}
