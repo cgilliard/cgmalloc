@@ -90,9 +90,14 @@ static void panic(const char *msg) {
 
 static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
-	size_t prefix_size, actual_size, suffix_size;
+	size_t prefix_size, actual_size, suffix_size, alloc_size;
 
-	base = mmap(NULL, CHUNK_SIZE * 2, PROT_READ | PROT_WRITE,
+	if (size < CHUNK_SIZE)
+		alloc_size = CHUNK_SIZE * 2;
+	else
+		alloc_size = size * 2;
+
+	base = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
 		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (base == MAP_FAILED) return NULL;
 
@@ -101,7 +106,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	prefix_size = (size_t)aligned_ptr - (size_t)base;
 	if (prefix_size) munmap(base, prefix_size);
 
-	suffix_size = (2 * CHUNK_SIZE) - (prefix_size + size);
+	suffix_size = alloc_size - (prefix_size + size);
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
