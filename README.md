@@ -13,7 +13,7 @@ or on Mac OS:
 You may have to ensure that the headers and shared objects are in your search path.
 
 To build the shared object:
-```# make clean all``
+```# make clean all```
 
 To build the test program:
 ```# make clean test```
