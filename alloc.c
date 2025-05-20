@@ -110,10 +110,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
 	size_t prefix_size, suffix_size, alloc_size;
 
-	if (size < alignment)
-		alloc_size = alignment * 2;
-	else
-		alloc_size = size * 2;
+	alloc_size = size + alignment;
 
 	base = mmap(NULL, alloc_size, PROT_READ | PROT_WRITE,
 		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
