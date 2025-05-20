@@ -1,6 +1,5 @@
-#include "alloc.h"
-
-#include "lock.h"
+#include <alloc.h>
+#include <lock.h>
 
 /* For mmap/munmap */
 #include <sys/mman.h>

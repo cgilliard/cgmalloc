@@ -1,7 +1,6 @@
+#include <alloc.h>
 #include <criterion/criterion.h>
 #include <stdio.h>
-
-#include "alloc.h"
 
 Test(alloc, alloc1) {
 	size_t last_address;
