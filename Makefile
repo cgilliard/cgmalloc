@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-O3
+CFLAGS=-fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE
 LDFLAGS=-O3
 ALLOCFLAGS=
 BENCHFLAGS=-O3 -flto
