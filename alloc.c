@@ -280,18 +280,12 @@ void cg_free(void *ptr) {
 	}
 }
 
-void *malloc(size_t size) {
-    return cg_malloc(size);
-}
+#ifdef SET_MALLOC
+void *malloc(size_t size) { return cg_malloc(size); }
 
-void free(void *ptr) {
-    cg_free(ptr);
-}
+void free(void *ptr) { cg_free(ptr); }
 
-void *__wrap_malloc(size_t size) {
-    return cg_malloc(size);
-}
+void *__wrap_malloc(size_t size) { return cg_malloc(size); }
 
-void __wrap_free(void *ptr) {
-    cg_free(ptr);
-}
+void __wrap_free(void *ptr) { cg_free(ptr); }
+#endif /* SET_MALLOC */
