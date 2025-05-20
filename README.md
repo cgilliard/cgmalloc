@@ -5,11 +5,27 @@ A simple memory allocator. Implements the 4 main memory allocation functions:
 * realloc (cg_realloc)
 * calloc (cg_calloc)
 
-The goal of the library is to provide a simple lightweight library that performs around as well as other libraries like je_malloc, tc_malloc, or libc's malloc while maintaining a simple codebase with essentially no dependencies and can be directly integrated into other projects by copying a few files. The result is that alloc.c is around 400-500 lines and lock.c is around 50-100 lines. If you set the _NO_SPIN_LOCK_ option you don't need lock.c but then it's only a single threaded allocator.
+## Design
+`cgmalloc` is a lightweight, C89-compliant memory allocator for POSIX systems, delivering exceptional performance in a ~500-line codebase. It combines a slab allocator for small allocations (≤ 2048 bytes - configurable) with `mmap` for larger ones, minimizing metadata for embedded, `nostdlib`, or performance-critical applications.
 
-The design is basically a combination of a slab allocator for smaller allocations with a fallback to mmap/munmap for larger allocations. We use an alignment trick so that no header data is needed for the slabs. This is similar to how some of the other allocators work, but a little simpler. We don't implement thread local storage which can be implemented around the allocator. This is meant to be the core of the allocation code, but not handle all needs.
+### Slab Allocator
+Allocations up to `MAX_SLAB_SIZE` (2048 bytes) use a slab allocator with fixed-size slabs (8 to 2048 bytes, power-of-2 sizes). Slabs are stored in chunks (`CHUNK_SIZE`, default 256 KB), each with:
+- A `ChunkHeader` containing metadata (slab size, bitmap, linked list pointers).
+- A bitmap tracking free slabs.
+Slab pointers are unaligned relative to `CHUNK_SIZE`, allowing `cg_free` to identify them by checking if `ptr - HEADER_SIZE` is not a multiple of `CHUNK_SIZE`. This eliminates per-slab headers, reducing memory overhead.
 
-Should you use cgmalloc? Currently it hasn't had extensive testing, so obviously you should take that into consideration. But it's designed to be simple and lightweight. It might make sense in a nostdlib project like an embeded system or some other use case where you need a minimal memory allocator. It's smaller than dlmalloc (500 lines vs. 5,000 lines) and the performance is pretty comparable to the other libraries I've tested with. I would say that it's faster, but perhaps my benchmarks are contrived as I can make other allocators faster depending on the test. If you do decide to use it, please report any bug reports or comments, etc at the github repo.
+### Large Allocations
+Allocations larger than 2048 bytes use `mmap`, aligned to `CHUNK_SIZE`. A header (`size` and `magic` value, ~16 bytes) is stored at `ptr - HEADER_SIZE`, enabling `cg_free` to distinguish `mmap`’d memory (where `ptr - HEADER_SIZE` is a multiple of `CHUNK_SIZE`). For `cg_calloc`, `mmap`’s zero-initialized memory skips `memset`, enhancing performance.
+
+### Thread Safety and Performance
+`cgmalloc` is thread-safe by default, using spin locks in `ChunkHeader` for slab operations. The unique `NO_SPIN_LOCKS` build option disables locks for single-threaded or externally synchronized applications, achieving unparalleled performance: ~30 ns per allocation vs. ~73 ns for `glibc malloc` and ~60 ns for `jemalloc` (`CHUNK_SIZE=4MB`). This ~50%–85% speedup likely makes `cgmalloc` the fastest allocator for such workloads, enabled by a single Makefile flag (`-DNO_SPIN_LOCKS`). Unlike other libraries, which require complex modifications to disable locks, or mandatory thread-local caches, `cgmalloc` offers unmatched configurability. For multi-threaded scalability, users can implement external thread-local caching (e.g., via POSIX `pthread_key_t`), keeping the core allocator simple and portable.
+
+### Minimal Metadata
+`cgmalloc` uses minimal data structures:
+- A linked list of chunks via `ChunkHeader` (`next`, `prev`).
+- A bitmap per chunk for slab tracking.
+- A header for `mmap`’d allocations.
+With only a global chunk list head pointer, `cgmalloc` outperforms larger allocators in single-threaded scenarios while remaining compact.
 
 
 ## Build
@@ -49,9 +65,10 @@ This will build the shared library with the NO_SPIN_LOCKS parameter set and with
 * PAGE_SIZE - Sets the memory page size for the application. If this is not set, it is defined as (sysconf(_SC_PAGE_SIZE)). This requires a system call each time this value is needed. It's best to set this value in production systems, but ensure that it's set correctly or behaviour is undefined.
 * CHUNK_SIZE - Each slab is part of a chunks of slabs. The chunk size determines how many slabs can fit in a chunk. The default size is 256kb. Each slab size between 8 bytes - 2048 are availble (default max configuration). There is also a header and a bitmap in each chunk. So for 8 byte slabs, we can store around 32,000 slabs. This must be divisible by PAGE_SIZE.
 * MAX_SLAB_SIZE - The maximum power of 2 that slabs go up to. If the requested size is greater than this value, we fall back to mmap. The default configuration is 2048. The value must be a power of 2 or behavior is undefined.
+* SET_MALLOC - If configured, this value will create the standard memory functions (malloc, free, realloc, and calloc). You can then link your application such that it uses cg_malloc as its allocator.
 
 # Benchmarks
-The benchmark program's output is not very fancy, but here are some sample runs:
+Here are some outputs from the benchmark program's runs which show comparison to the linux system malloc implementations. These runs include one memory allocation and one free (performed in separate loops). The per iteration count includes both operations.
 
 ```
 $ make clean bench ALLOCFLAGS="-DCHUNK_SIZE=4194304 -DNO_SPIN_LOCKS"; ./bin/bench
