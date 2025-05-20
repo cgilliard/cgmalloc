@@ -252,11 +252,10 @@ void *cg_malloc(size_t size) {
 	if (size > SIZE_MAX - HEADER_SIZE) {
 		errno = EINVAL;
 		return NULL;
-	};
-	if (size < MAX_SLAB_SIZE) {
+	} else if (size < MAX_SLAB_SIZE) { /* slab alloc */
 		size_t slab_size = calculate_slab_size(size);
 		return alloc_slab(slab_size);
-	} else {
+	} else { /* large alloc */
 		void *ptr;
 		size_t aligned_size =
 		    (((HEADER_SIZE + size) + PAGE_SIZE - 1) / PAGE_SIZE) *
@@ -270,10 +269,9 @@ void *cg_malloc(size_t size) {
 }
 
 void cg_free(void *ptr) {
-	void *aligned_ptr;
+	void *aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);
 	if (!ptr) return;
-	aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);
-	if ((size_t)aligned_ptr % CHUNK_SIZE == 0) {
+	if ((size_t)aligned_ptr % CHUNK_SIZE == 0) { /* large alloc */
 		size_t actual_size;
 		if (*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) !=
 		    MAGIC_BYTES)
@@ -281,17 +279,14 @@ void cg_free(void *ptr) {
 			    "Memory corruption: MAGIC not correct. Halting!\n");
 		actual_size = *(size_t *)aligned_ptr;
 		munmap(aligned_ptr, actual_size);
-	} else {
+	} else { /* slab alloc */
 		free_slab(ptr);
 	}
 }
 
 #ifdef SET_MALLOC
 void *malloc(size_t size) { return cg_malloc(size); }
-
 void free(void *ptr) { cg_free(ptr); }
-
 void *__wrap_malloc(size_t size) { return cg_malloc(size); }
-
 void __wrap_free(void *ptr) { cg_free(ptr); }
 #endif /* SET_MALLOC */

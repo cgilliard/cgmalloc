@@ -9,8 +9,9 @@
 void lock_init(Lock *lock) { *lock = 0; }
 
 void lockguard_cleanup(LockGuardImpl *lg) {
-	if (!lg->lock) return;
-	if (lg->is_write) {
+	if (!lg->lock) {
+		return;
+	} else if (lg->is_write) {
 		__atomic_store_n(lg->lock, 0, __ATOMIC_RELEASE);
 	} else {
 		__atomic_fetch_sub(lg->lock, 1, __ATOMIC_RELEASE);
@@ -20,7 +21,10 @@ void lockguard_cleanup(LockGuardImpl *lg) {
 LockGuardImpl lock_read(Lock *lock) {
 	uint64_t state, desired;
 	LockGuardImpl ret;
+	int first = 1;
 	do {
+		if (!first) sched_yield();
+		first = 0;
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE) &
 			~(WFLAG | WREQUEST);
 		desired = state + 1;
@@ -30,6 +34,7 @@ LockGuardImpl lock_read(Lock *lock) {
 	ret.is_write = 0;
 	return ret;
 }
+
 LockGuardImpl lock_write(Lock *lock) {
 	uint64_t state, desired;
 	LockGuardImpl ret;
