@@ -97,20 +97,22 @@
 			    (uint64_t *)((unsigned char *)(chunk) +          \
 					 sizeof(ChunkHeader));               \
 			size_t max_words = ((max) + 63) >> 6;                \
-			size_t i;                                            \
-			for (i = chunk->header.last_free; i < max_words;     \
-			     i++) {                                          \
-				if (bitmap[i] != 0xFFFFFFFFFFFFFFFF) {       \
-					uint64_t word = bitmap[i];           \
+			while (chunk->header.last_free < max_words) {        \
+				if (bitmap[chunk->header.last_free] !=       \
+				    0xFFFFFFFFFFFFFFFF) {                    \
+					uint64_t word =                      \
+					    bitmap[chunk->header.last_free]; \
 					size_t bit_value =                   \
 					    __builtin_ctzll(~word);          \
-					size_t index = i * 64 + bit_value;   \
+					size_t index =                       \
+					    chunk->header.last_free * 64 +   \
+					    bit_value;                       \
 					if (index < max) {                   \
-						chunk->header.last_free = i; \
 						(result) = index;            \
 						break;                       \
 					}                                    \
 				}                                            \
+				chunk->header.last_free++;                   \
 			}                                                    \
 		}                                                            \
 	} while (0)
@@ -287,7 +289,7 @@ void *cg_malloc(size_t size) {
 	if (size > SIZE_MAX - HEADER_SIZE) {
 		errno = EINVAL;
 		return NULL;
-	} else if (size < MAX_SLAB_SIZE) { /* slab alloc */
+	} else if (size <= MAX_SLAB_SIZE) { /* slab alloc */
 		size_t slab_size = calculate_slab_size(size);
 		return alloc_slab(slab_size);
 	} else { /* large alloc */
@@ -323,9 +325,102 @@ void cg_free(void *ptr) {
 	}
 }
 
+void *cg_calloc(size_t n, size_t size) {
+	size_t total_size;
+	void *ptr;
+
+	if (n == 0 || size == 0) return NULL;
+	if (n > (SIZE_MAX / size)) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	total_size = n * size;
+	ptr = cg_malloc(total_size);
+	if (ptr == NULL) return NULL;
+	/* for larger allocations, we use mmap directly which already zeros. */
+	if (total_size <= MAX_SLAB_SIZE) memset(ptr, 0, total_size);
+	return ptr;
+}
+
+void *cg_realloc(void *ptr, size_t size) {
+	void *new_ptr;
+	void *aligned_ptr;
+	Chunk *chunk;
+	size_t old_size;
+	size_t copy_size;
+	int is_mmap;
+
+	/* Case 1: ptr is NULL, behave like malloc */
+	if (ptr == NULL) {
+		return cg_malloc(size);
+	}
+
+	/* Case 2: size is 0, behave like free */
+	if (size == 0) {
+		cg_free(ptr);
+		return NULL;
+	}
+
+	/* Case 3: Check for invalid size */
+	if (size > (size_t)-1 - HEADER_SIZE) { /* SIZE_MAX not in C89 */
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	/* Case 4: Get old allocation details */
+	is_mmap = 0;
+	old_size = 0;
+	aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);
+	if ((size_t)aligned_ptr % CHUNK_SIZE == 0) { /* Large allocation */
+		if (*(unsigned long *)((size_t)aligned_ptr + sizeof(size_t)) !=
+		    MAGIC_BYTES) {
+			errno = EINVAL; /* Invalid magic */
+			return NULL;
+		}
+		old_size = *(size_t *)aligned_ptr;
+		is_mmap = 1;
+	} else { /* Slab allocation */
+		chunk = (Chunk *)(((size_t)ptr / CHUNK_SIZE) * CHUNK_SIZE);
+		if (chunk->header.magic != MAGIC_BYTES) {
+			errno = EINVAL; /* Invalid magic */
+			return NULL;
+		}
+		old_size = chunk->header.slab_size;
+	}
+
+	/* Case 5: Shrink within same allocator type, reuse ptr */
+	if (size <= old_size) {
+		if ((size <= MAX_SLAB_SIZE && !is_mmap) ||
+		    (size > MAX_SLAB_SIZE && is_mmap)) {
+			/* No size update needed for slabs (fixed slot size) */
+			return ptr;
+		}
+	}
+
+	/* Case 6: Allocate new memory */
+	new_ptr = cg_malloc(size);
+	if (new_ptr == NULL) {
+		errno = ENOMEM;
+		return NULL; /* Original ptr remains valid */
+	}
+
+	/* Copy old data, up to minimum of old and new sizes */
+	copy_size = (old_size < size) ? old_size : size;
+	memcpy(new_ptr, ptr, copy_size);
+
+	/* Free old memory */
+	cg_free(ptr);
+
+	return new_ptr;
+}
+
 #ifdef SET_MALLOC
 void *malloc(size_t size) { return cg_malloc(size); }
 void free(void *ptr) { cg_free(ptr); }
+void *calloc(size_t n, size_t size) { return cg_calloc(n, size); }
+void *realloc(void *ptr, size_t size) { return cg_realloc(ptr, size); }
 void *__wrap_malloc(size_t size) { return cg_malloc(size); }
 void __wrap_free(void *ptr) { cg_free(ptr); }
+void *__wrap_calloc(size_t n, size_t size) { return cg_calloc(n, size); }
+void *__wrap_realloc(void *ptr, size_t size) { return cg_realloc(ptr, size); }
 #endif /* SET_MALLOC */

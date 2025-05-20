@@ -31,14 +31,15 @@
 
 /* To optimize this it's suggested to compile with -DPAGE_SIZE=VALUE. This
  * avoids the system from having to invoke the system call each time it needs
- * this value. */
+ * this value. It's important you get the actual page size of the system correct
+ * or behavior is undefined. */
 #ifndef PAGE_SIZE
 #define PAGE_SIZE (sysconf(_SC_PAGE_SIZE))
 #endif /* PAGE_SIZE */
 
 /* Size of chunks. All allocations are aligned to this size. This allows for us
- * to quickly find header info about a particular deallocation. This value must
- * be page aligned.
+ * to quickly find header info about a particular deallocation. Note: this value
+ * must be page aligned or behavior is undefined.
  */
 #ifndef CHUNK_SIZE
 #define CHUNK_SIZE (256 * 1024)
@@ -46,14 +47,19 @@
 
 /* Slab sizes are powers of 2 begining with 8. MAX_SLAB_SIZE is the largest slab
  * size we use. Requests for larger allocations allocation CHUNK_SIZE or more.
+ * Note: this value must be a power of 2 or behavior is undefined.
  */
 #ifndef MAX_SLAB_SIZE
-#define MAX_SLAB_SIZE 16384
+#define MAX_SLAB_SIZE 2048
 #endif /* MAX_SLAB_SIZE */
 
+/* malloc implementation */
 void *cg_malloc(size_t size);
+/* free implementation */
 void cg_free(void *ptr);
+/* calloc implementation */
 void *cg_calloc(size_t n, size_t size);
+/* realloc implementation */
 void *cg_realloc(void *ptr, size_t size);
 
 #endif /* _ALLOC_H__ */

@@ -97,3 +97,104 @@ Test(alloc, slab_sizes) {
 	for (size_t i = 1025; i <= 2048; i++)
 		cr_assert_eq(calculate_slab_size(i), 2048);
 }
+
+Test(alloc, slab_impl) {
+	int size = 127;
+	char *values[size];
+	size_t last_address = 0;
+	for (int i = 0; i < size; i++) {
+		values[i] = cg_malloc(2048);
+		if (last_address)
+			cr_assert_eq((size_t)values[i], last_address + 2048);
+		last_address = (size_t)values[i];
+	}
+
+	void *next = cg_malloc(2048);
+	// This creates a new mmap so the address will not be last + 2048
+	cr_assert((size_t)next != last_address + 2048);
+
+	void *next2 = cg_malloc(2040);	// still in the 2048 block size
+	cr_assert_eq((size_t)next2, (size_t)next + 2048);
+
+	cg_free(next);
+	cg_free(next2);
+
+	for (int i = 0; i < size; i++) {
+		cg_free(values[i]);
+	}
+}
+
+Test(alloc, slab_release) {
+	int size = 127;
+	char *values[size];
+	size_t last_address = 0;
+	for (int i = 0; i < size; i++) {
+		values[i] = cg_malloc(2048);
+		if (last_address)
+			cr_assert_eq((size_t)values[i], last_address + 2048);
+		last_address = (size_t)values[i];
+	}
+
+	// free several slabs
+	cg_free(values[18]);
+	cg_free(values[125]);
+	cg_free(values[15]);
+
+	// ensure last pointer is being used and gets us the correct bits.
+	void *next = cg_malloc(2048);
+	void *next2 = cg_malloc(2048);
+	void *next3 = cg_malloc(2048);
+
+	cr_assert_eq((size_t)next, (size_t)values[15]);
+	cr_assert_eq((size_t)next2, (size_t)values[18]);
+	cr_assert_eq((size_t)next3, (size_t)values[125]);
+
+	values[15] = next;
+	values[18] = next2;
+	values[125] = next3;
+
+	for (int i = 0; i < size; i++) {
+		cg_free(values[i]);
+	}
+}
+
+Test(alloc, multi_chunk_search) {
+	int size = 1000;
+	char *values[size];
+	size_t last_address = 0;
+	for (int i = 0; i < size; i++) {
+		values[i] = cg_malloc(2048);
+	}
+
+	// free several slabs
+	cg_free(values[418]);
+	cg_free(values[825]);
+	cg_free(values[15]);
+
+	void *next = cg_malloc(2048);
+	void *next2 = cg_malloc(2048);
+	void *next3 = cg_malloc(2048);
+
+	cr_assert_eq((size_t)next, (size_t)values[15]);
+	cr_assert_eq((size_t)next2, (size_t)values[418]);
+	cr_assert_eq((size_t)next3, (size_t)values[825]);
+
+	values[15] = next;
+	values[825] = next2;
+	values[418] = next3;
+
+	for (int i = 0; i < size; i++) {
+		cg_free(values[i]);
+	}
+}
+
+Test(alloc, larger_allocations) {
+	size_t max = 16384 * 3;
+	for (size_t i = 2049; i < max; i++) {
+		char *ptr = cg_malloc(i);
+		cr_assert(ptr);
+		for (size_t j = 0; j < 10; j++) ptr[j] = 'x';
+		for (size_t j = 0; j < 10; j++) cr_assert_eq(ptr[j], 'x');
+		cg_free(ptr);
+	}
+}

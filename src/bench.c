@@ -48,7 +48,7 @@ int main() {
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	diff = (end.tv_sec - start.tv_sec) * 1000000000L +
 	       (end.tv_nsec - start.tv_nsec);
-	printf("malloc diff=%ld (%fns per iteration)\n", diff,
+	printf("malloc    total test time=%ldns (%fns per iteration)\n", diff,
 	       ((double)diff / (double)size));
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
@@ -61,7 +61,7 @@ int main() {
 	clock_gettime(CLOCK_MONOTONIC, &end);
 	diff = (end.tv_sec - start.tv_sec) * 1000000000L +
 	       (end.tv_nsec - start.tv_nsec);
-	printf("cc_malloc diff=%ld (%fns per iteration)\n", diff,
+	printf("cc_malloc total test time=%ldns (%fns per iteration)\n", diff,
 	       ((double)diff / (double)size));
 
 	cg_free(arr);
