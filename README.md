@@ -116,7 +116,7 @@ int main() {
 4.) Execute the program:
 
 ```
-$ ./hello 
+$ ./hello
 v=139374946418984,s=hi
 ```
 
