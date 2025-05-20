@@ -115,14 +115,17 @@ int main() {
 
 4.) Execute the program:
 
-```$ ./hello 
-v=139374946418984,s=hi```
+```
+$ ./hello 
+v=139374946418984,s=hi
+```
 
 With the -DSET_MALLOC option, you can export malloc/free/realloc/calloc and use them directly, but you might have some difficulty getting the compiler to use this version as opposed to the standard library's version as I did. But I was eventually able to get it to work. It's much easier if you are compiling with a -nostdlib.
 
 Here's an output of nm showing what it looks like with the exported functions:
 
-```$ make clean all ALLOCFLAGS="-DSET_MALLOC"
+```
+$ make clean all ALLOCFLAGS="-DSET_MALLOC"
 rm -fr .obj/* lib/* bin/*
 clang -Iinclude -fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE -DSET_MALLOC -c src/alloc.c -o .obj/alloc.o
 clang -Iinclude -fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE -c src/lock.c -o .obj/lock.o
@@ -139,4 +142,5 @@ $ nm lib/libcgmalloc.so  | grep -E "malloc|calloc|realloc|free"
 0000000000001860 T cg_realloc
 0000000000001950 T free
 0000000000001940 T malloc
-00000000000019c0 T realloc```
+00000000000019c0 T realloc
+```
