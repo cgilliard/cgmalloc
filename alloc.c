@@ -92,8 +92,8 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
 	size_t prefix_size, actual_size, suffix_size, alloc_size;
 
-	if (size < CHUNK_SIZE)
-		alloc_size = CHUNK_SIZE * 2;
+	if (size < alignment)
+		alloc_size = alignment * 2;
 	else
 		alloc_size = size * 2;
 
