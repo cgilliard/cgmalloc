@@ -1,6 +1,7 @@
 *.o
 *.so
 *.swp
+*.d
 test.dSYM
 test
 bench

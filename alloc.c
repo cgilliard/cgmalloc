@@ -280,12 +280,18 @@ void cg_free(void *ptr) {
 	}
 }
 
-#ifdef DEFINE_GLOBALS
-inline void *malloc(size_t size) { return cg_malloc(size); }
-inline void free(void *ptr) { cg_free(ptr); }
-#endif /* DEFINE_GLOBALS */
+void *malloc(size_t size) {
+    return cg_malloc(size);
+}
 
-/*
-void *zeroed(size_t n, size_t size) { return NULL; }
-void *resize(void *ptr, size_t size) { return NULL; }
-*/
+void free(void *ptr) {
+    cg_free(ptr);
+}
+
+void *__wrap_malloc(size_t size) {
+    return cg_malloc(size);
+}
+
+void __wrap_free(void *ptr) {
+    cg_free(ptr);
+}

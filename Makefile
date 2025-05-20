@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE
+CFLAGS = -fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE
 TEST_CFLAGS = -g
 BENCH_FLAGS = -O3 -flto
 TEST_LDFLAGS = -lcriterion
@@ -34,6 +34,11 @@ test: alloc.o lock.o test.o
 bench: alloc.o lock.o bench.o
 	$(CC) $(BENCH_FLAGS) -o $@ $^
 
+install:
+	sudo cp libcgmalloc.so /usr/local/lib/
+	sudo cp alloc.h /usr/local/include/cgmalloc.h
+	sudo ldconfig
+
 # Prevent automatic dependency generation from triggering builds
 %.d: %.c
 	@$(CC) $(CFLAGS) -M $< > $@
@@ -43,5 +48,4 @@ bench: alloc.o lock.o bench.o
 clean:
 	rm -rf *.o *.so *.d test test.dSYM bench
 
-.PHONY: all clean lib test bench
-
+.PHONY: all clean lib test bench install
