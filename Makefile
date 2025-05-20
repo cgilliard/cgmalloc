@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -std=c89 -pedantic -Wall -Wextra -O3
+CFLAGS = -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE
 TEST_CFLAGS = -g
 BENCH_FLAGS = -O3 -flto
 LDFLAGS = -lcriterion

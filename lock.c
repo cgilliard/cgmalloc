@@ -18,7 +18,7 @@ void lockguard_cleanup(LockGuardImpl *lg) {
 
 LockGuardImpl lock_read(Lock *lock) {
 	uint64_t state, desired;
-	LockGuardImpl ret = {.is_write = 0};
+	LockGuardImpl ret;
 	do {
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE) &
 			~(WFLAG | WREQUEST);
@@ -26,11 +26,12 @@ LockGuardImpl lock_read(Lock *lock) {
 	} while (!__atomic_compare_exchange_n(
 	    lock, &state, desired, 0, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
 	ret.lock = lock;
+	ret.is_write = 0;
 	return ret;
 }
 LockGuardImpl lock_write(Lock *lock) {
 	uint64_t state, desired;
-	LockGuardImpl ret = {.is_write = 1};
+	LockGuardImpl ret;
 	do {
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE) &
 			~(WFLAG | WREQUEST);
@@ -47,5 +48,6 @@ LockGuardImpl lock_write(Lock *lock) {
 	} while (!__atomic_compare_exchange_n(
 	    lock, &state, desired, 0, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
 	ret.lock = lock;
+	ret.is_write = 1;
 	return ret;
 }
