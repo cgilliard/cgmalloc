@@ -86,3 +86,57 @@ chris@chris-ubuntu:~/projects/cgmalloc$
 ```
 
 So, as you can see, in some cases it outperforms the glibc malloc and in other cases it does not (depending on configuration). I also ran some tests against je_malloc and je_malloc is slightly faster than glibc malloc, but with larger CHUNK_SIZES cg_malloc can outperform. I think one of the interesting features is the NO_SPIN_LOCKS feature because there are many single threaded applications (or that do their own locking around memory management) that could definitely take advantage of this feature. It's significantly faster than when spin locks are enabled.
+
+# Linking to cg_malloc
+Here are the steps to link to the shared library produced by cg_malloc:
+1.) build cg_malloc:
+
+```# make clean all```
+
+2.) Create a test program
+
+```
+#include <stdio.h>
+#include <string.h>
+#include "include/alloc.h"
+
+int main() {
+        char *ptr = cg_malloc(100);
+        strcpy(ptr, "hi");
+        printf("v=%lu,s=%s\n", (size_t)ptr, ptr);
+        cg_free(ptr);
+        return 0;
+}
+```
+
+3.) Compile the program linking to the shared library in your lib directory:
+
+```clang test.c -lcgmalloc -Llib -Wl,-rpath,lib -o hello```
+
+4.) Execute the program:
+
+```$ ./hello 
+v=139374946418984,s=hi```
+
+With the -DSET_MALLOC option, you can export malloc/free/realloc/calloc and use them directly, but you might have some difficulty getting the compiler to use this version as opposed to the standard library's version as I did. But I was eventually able to get it to work. It's much easier if you are compiling with a -nostdlib.
+
+Here's an output of nm showing what it looks like with the exported functions:
+
+```$ make clean all ALLOCFLAGS="-DSET_MALLOC"
+rm -fr .obj/* lib/* bin/*
+clang -Iinclude -fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE -DSET_MALLOC -c src/alloc.c -o .obj/alloc.o
+clang -Iinclude -fPIC -std=c89 -pedantic -Wall -Wextra -O3 -D_GNU_SOURCE -c src/lock.c -o .obj/lock.o
+clang -O3 -shared -o lib/libcgmalloc.so .obj/alloc.o .obj/lock.o
+$ nm lib/libcgmalloc.so  | grep -E "malloc|calloc|realloc|free"
+00000000000019f0 T __wrap_calloc
+00000000000019e0 T __wrap_free
+00000000000019d0 T __wrap_malloc
+0000000000001a50 T __wrap_realloc
+0000000000001960 T calloc
+0000000000001800 T cg_calloc
+0000000000001660 T cg_free
+00000000000011e0 T cg_malloc
+0000000000001860 T cg_realloc
+0000000000001950 T free
+0000000000001940 T malloc
+00000000000019c0 T realloc```
