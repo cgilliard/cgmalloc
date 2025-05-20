@@ -145,8 +145,10 @@ static void *alloc_slab(size_t slab_size) {
 	}
 	ptr = __alloc_head_ptrs[index];
 	if (!ptr) {
+#ifndef NO_SPIN_LOCKS
 		LockGuard lg __attribute__((unused)) =
 		    lock_write(&__alloc_global_lock);
+#endif /* NO_SPIN_LOCKS */
 
 		if (!__alloc_head_ptrs[index]) {
 			__alloc_head_ptrs[index] =
@@ -165,8 +167,10 @@ static void *alloc_slab(size_t slab_size) {
 	}
 
 	while (ptr) {
+#ifndef NO_SPIN_LOCKS
 		LockGuard lg __attribute__((unused)) =
 		    lock_write(&ptr->header.lock);
+#endif /* NO_SPIN_LOCKS */
 		size_t bit;
 		NEXT_FREE_BIT(ptr, max, bit);
 		if (bit == (size_t)-1) {
@@ -208,8 +212,10 @@ static void free_slab(void *ptr) {
 		panic("Memory corruption: MAGIC not correct. Halting!\n");
 
 	{
+#ifndef NO_SPIN_LOCKS
 		LockGuard lg __attribute__((unused)) =
 		    lock_write(&chunk->header.lock);
+#endif /* NO_SPIN_LOCKS */
 
 		index = BITMAP_INDEX(ptr, chunk);
 		chunk->header.last_free = index / (sizeof(uint64_t) * 8);
@@ -227,8 +233,10 @@ static void free_slab(void *ptr) {
 		chunk_index = SLAB_INDEX(chunk->header.slab_size);
 
 		{
+#ifndef NO_SPIN_LOCKS
 			LockGuard globallg __attribute__((unused)) =
 			    lock_write(&__alloc_global_lock);
+#endif /* NO_SPIN_LOCKS */
 			if (__alloc_head_ptrs[chunk_index] == chunk)
 				__alloc_head_ptrs[chunk_index] =
 				    chunk->header.next;
