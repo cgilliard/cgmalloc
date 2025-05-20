@@ -37,7 +37,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	prefix_size = (size_t)aligned_ptr - (size_t)base;
 	if (prefix_size) munmap(base, prefix_size);
 
-	suffix_size = ((size * 2) - prefix_size) - size;
+	suffix_size = size - prefix_size;
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
@@ -228,7 +228,9 @@ void *alloc(size_t size) {
 		return alloc_slab(slab_size);
 	} else {
 		void *ptr;
-		ptr = alloc_aligned_memory(size, CHUNK_SIZE);
+		size_t aligned_size =
+		    ((size + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+		ptr = alloc_aligned_memory(aligned_size, CHUNK_SIZE);
 		return (void *)((size_t)ptr + HEADER_SIZE);
 	}
 }

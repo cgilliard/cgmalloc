@@ -9,7 +9,8 @@
 #define PAGE_SIZE (getpagesize())
 
 /* Size of chunks. All allocations are aligned to this size. This allows for us
- * to quickly find header info about a particular deallocation.
+ * to quickly find header info about a particular deallocation. This value must
+ * be page aligned.
  */
 #define CHUNK_SIZE (4 * 1024 * 1024)
 
