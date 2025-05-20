@@ -1,4 +1,5 @@
 #include "lock.h"
+
 /* For sched_yield */
 #include <sched.h>
 
@@ -42,8 +43,10 @@ LockGuardImpl lock_write(Lock *lock) {
 	desired = WFLAG;
 	do {
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE);
-		if (state != WREQUEST) sched_yield();
-		if (state != WREQUEST) continue;
+		if (state != WREQUEST) {
+			sched_yield();
+			continue;
+		}
 
 	} while (!__atomic_compare_exchange_n(
 	    lock, &state, desired, 0, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
