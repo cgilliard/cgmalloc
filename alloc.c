@@ -21,66 +21,6 @@
 #define FALSE 0
 #define MAX_SLAB_PTRS 32
 
-#include <stdio.h>
-
-static void panic(const char *msg) {
-	write(2, msg, strlen(msg));
-	exit(-1);
-}
-
-static void *alloc_aligned_memory(size_t size, size_t alignment) {
-	void *base, *aligned_ptr, *suffix_start;
-	size_t prefix_size, actual_size, suffix_size;
-
-	base = mmap(NULL, size * 2, PROT_READ | PROT_WRITE,
-		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	if (base == MAP_FAILED) return NULL;
-
-	aligned_ptr =
-	    (void *)(((size_t)base + alignment - 1) & ~(alignment - 1));
-	prefix_size = (size_t)aligned_ptr - (size_t)base;
-	if (prefix_size) munmap(base, prefix_size);
-
-	suffix_size = size - prefix_size;
-	suffix_start = (void *)((size_t)aligned_ptr + size);
-	if (suffix_size) munmap(suffix_start, suffix_size);
-
-	actual_size = (size * 2) - prefix_size;
-	*(uint64_t *)aligned_ptr = actual_size;
-	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
-	return aligned_ptr;
-}
-
-static size_t calculate_slab_size(size_t value) {
-	if (value <= 8) return 8;
-	value--;
-	value |= value >> 1;
-	value |= value >> 2;
-	value |= value >> 4;
-	value |= value >> 8;
-	value |= value >> 16;
-	if (sizeof(size_t) > 4) value |= value >> 32;
-	return value + 1;
-}
-
-typedef struct Chunk Chunk;
-
-typedef struct {
-	uint32_t slab_size;
-	uint32_t last_free;
-	struct Chunk *next;
-	struct Chunk *prev;
-	uint64_t magic;
-	Lock lock;
-} ChunkHeader;
-
-struct Chunk {
-	ChunkHeader header;
-};
-
-Lock __alloc_global_lock = LOCK_INIT;
-Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
-
 #define SET_BITMAP(chunk, index)                                               \
 	do {                                                                   \
 		unsigned char *tmp;                                            \
@@ -142,6 +82,64 @@ Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 			}                                                    \
 		}                                                            \
 	} while (0)
+
+static void panic(const char *msg) {
+	write(2, msg, strlen(msg));
+	exit(-1);
+}
+
+static void *alloc_aligned_memory(size_t size, size_t alignment) {
+	void *base, *aligned_ptr, *suffix_start;
+	size_t prefix_size, actual_size, suffix_size;
+
+	base = mmap(NULL, size * 2, PROT_READ | PROT_WRITE,
+		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (base == MAP_FAILED) return NULL;
+
+	aligned_ptr =
+	    (void *)(((size_t)base + alignment - 1) & ~(alignment - 1));
+	prefix_size = (size_t)aligned_ptr - (size_t)base;
+	if (prefix_size) munmap(base, prefix_size);
+
+	suffix_size = size - prefix_size;
+	suffix_start = (void *)((size_t)aligned_ptr + size);
+	if (suffix_size) munmap(suffix_start, suffix_size);
+
+	actual_size = (size * 2) - prefix_size;
+	*(uint64_t *)aligned_ptr = actual_size;
+	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
+	return aligned_ptr;
+}
+
+static size_t calculate_slab_size(size_t value) {
+	if (value <= 8) return 8;
+	value--;
+	value |= value >> 1;
+	value |= value >> 2;
+	value |= value >> 4;
+	value |= value >> 8;
+	value |= value >> 16;
+	if (sizeof(size_t) > 4) value |= value >> 32;
+	return value + 1;
+}
+
+typedef struct Chunk Chunk;
+
+typedef struct {
+	uint32_t slab_size;
+	uint32_t last_free;
+	struct Chunk *next;
+	struct Chunk *prev;
+	uint64_t magic;
+	Lock lock;
+} ChunkHeader;
+
+struct Chunk {
+	ChunkHeader header;
+};
+
+Lock __alloc_global_lock = LOCK_INIT;
+Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
 static void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;
