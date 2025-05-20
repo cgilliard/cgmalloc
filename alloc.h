@@ -6,7 +6,7 @@
 
 /* To optimize this declare your page size here. This avoids the system from
  * having to invoke the system call each time it needs this value. */
-#define PAGE_SIZE (getpagesize())
+#define PAGE_SIZE (sysconf(_SC_PAGE_SIZE))
 
 /* Size of chunks. All allocations are aligned to this size. This allows for us
  * to quickly find header info about a particular deallocation. This value must

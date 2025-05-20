@@ -4,7 +4,7 @@ TEST_CFLAGS = -g
 BENCH_FLAGS = -O3 -flto
 TEST_LDFLAGS = -lcriterion
 LDFLAGS = -O3 -flto
-SET_MALLOC =
+ALLOC_FLAGS =
 
 SRCS = alloc.c lock.c test.c bench.c
 OBJS = alloc.o lock.o test.o bench.o
@@ -13,7 +13,7 @@ DEPS = $(SRCS:.c=.d)
 all: test bench lib
 
 alloc.o: alloc.c alloc.h
-	$(CC) $(CFLAGS) $(SET_MALLOC) -c $< -o $@
+	$(CC) $(CFLAGS) $(ALLOC_FLAGS) -c $< -o $@
 
 lock.o: lock.c lock.h
 	$(CC) $(CFLAGS) -c $< -o $@

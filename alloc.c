@@ -92,7 +92,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
 	size_t prefix_size, actual_size, suffix_size;
 
-	base = mmap(NULL, size * 2, PROT_READ | PROT_WRITE,
+	base = mmap(NULL, CHUNK_SIZE * 2, PROT_READ | PROT_WRITE,
 		    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if (base == MAP_FAILED) return NULL;
 
@@ -101,7 +101,7 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	prefix_size = (size_t)aligned_ptr - (size_t)base;
 	if (prefix_size) munmap(base, prefix_size);
 
-	suffix_size = size - prefix_size;
+	suffix_size = (2 * CHUNK_SIZE) - (prefix_size + size);
 	suffix_start = (void *)((size_t)aligned_ptr + size);
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
@@ -249,7 +249,6 @@ static void free_slab(void *ptr) {
 
 	munmap(chunk, CHUNK_SIZE);
 }
-
 void *cg_malloc(size_t size) {
 	if (size < MAX_SLAB_SIZE) {
 		size_t slab_size = calculate_slab_size(size);

@@ -9,8 +9,9 @@ Test(alloc, alloc1) {
 
 	void *a = cg_malloc(10);
 
-	for (int i = 0; i < 1000; i++) {
+	for (int i = 0; i < 32000; i++) {
 		char *test2 = cg_malloc(10);
+		cr_assert(test2 != NULL);
 		test2[0] = 'a';
 		test2[1] = 'b';
 		cg_free(test2);

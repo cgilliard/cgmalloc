@@ -6,14 +6,16 @@
 
 int main() {
 	struct timespec start, end;
-	int size = 32000;
+	long size = 32000;
 	long diff;
 
-	void *arr[size];
+	void **arr;
+
+	arr = cg_malloc(sizeof(void *) * size);
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
 	for (int i = 0; i < size; i++) {
-		arr[i] = malloc(100);
+		arr[i] = malloc(1000);
 	}
 	for (int i = 0; i < size; i++) {
 		free(arr[i]);
@@ -36,6 +38,8 @@ int main() {
 	       (end.tv_nsec - start.tv_nsec);
 	printf("cc_malloc diff=%ld (%fns per iteration)\n", diff,
 	       ((double)diff / (double)size));
+
+	cg_free(arr);
 
 	return 0;
 }
