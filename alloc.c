@@ -1,4 +1,4 @@
-#include "cgmalloc.h"
+#include "alloc.h"
 
 /* For mmap/munmap */
 #include <sys/mman.h>
@@ -12,11 +12,7 @@
 #include <string.h>
 
 #define HEADER_SIZE 16
-#if __SIZEOF_POINTER__ == 4
-#define MAGIC_BYTES 0xABCD123A
-#else
-#define MAGIC_BYTES 0xAF8BC894322377BC
-#endif
+#define MAGIC_BYTES 0xAF8BC894322377BCL
 #define TRUE 1
 #define FALSE 0
 #define MAX_SLAB_PTRS 32
@@ -46,8 +42,8 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	if (suffix_size) munmap(suffix_start, suffix_size);
 
 	actual_size = (size * 2) - prefix_size;
-	*(size_t *)aligned_ptr = actual_size;
-	*(size_t *)((size_t)aligned_ptr + sizeof(size_t)) = MAGIC_BYTES;
+	*(uint64_t *)aligned_ptr = actual_size;
+	*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) = MAGIC_BYTES;
 
 	return aligned_ptr;
 }
@@ -70,19 +66,28 @@ typedef struct {
 	uint32_t slab_size;
 	struct Chunk *next;
 	struct Chunk *prev;
+	uint64_t magic;
 } ChunkHeader;
 
 struct Chunk {
 	ChunkHeader header;
 };
 
-Chunk *__cg_malloc_head_ptrs[MAX_SLAB_PTRS] = {0};
+Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
 #define SET_BITMAP(chunk, index)                                               \
 	do {                                                                   \
 		unsigned char *tmp;                                            \
 		tmp = (unsigned char *)(chunk);                                \
 		tmp[sizeof(ChunkHeader) + (index >> 3)] |= 0x1 << (index & 7); \
+	} while (FALSE);
+
+#define UNSET_BITMAP(chunk, index)                         \
+	do {                                               \
+		unsigned char *tmp;                        \
+		tmp = (unsigned char *)(chunk);            \
+		tmp[sizeof(ChunkHeader) + (index >> 3)] &= \
+		    ~(0x1 << (index & 7));                 \
 	} while (FALSE);
 
 #define BITMAP_SIZE(slab_size)                              \
@@ -97,6 +102,14 @@ Chunk *__cg_malloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 #define BITMAP_PTR(chunk, index, slab_size)             \
 	((unsigned char *)chunk + sizeof(ChunkHeader) + \
 	 BITMAP_SIZE(slab_size) + (index * slab_size))
+
+#define BITMAP_INDEX(ptr, chunk)                                       \
+	((((size_t)ptr) - (BITMAP_SIZE((chunk)->header.slab_size) +    \
+			   sizeof(ChunkHeader) + ((size_t)(chunk)))) / \
+	 (chunk)->header.slab_size)
+
+#define SLAB_INDEX(slab_size) \
+	(((sizeof(size_t) * 8 - 1) - __builtin_clzl(slab_size)) - 3)
 
 #define NEXT_FREE_BIT(chunk, max, result)                                     \
 	do {                                                                  \
@@ -133,19 +146,21 @@ Chunk *__cg_malloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 static void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;
 	size_t max = BITMAP_CAPACITY(slab_size);
-	size_t index =
-	    ((sizeof(size_t) * 8 - 1) - __builtin_clzl(slab_size)) - 3;
+	size_t index = SLAB_INDEX(slab_size);
 	if (index >= MAX_SLAB_PTRS || max == 0) {
 		errno = EINVAL;
 		return NULL;
 	}
-	ptr = __cg_malloc_head_ptrs[index];
+	ptr = __alloc_head_ptrs[index];
 	if (!ptr) {
-		ptr = alloc_aligned_memory(CHUNK_SIZE, CHUNK_SIZE);
-		if (!__cg_malloc_head_ptrs[index]) return NULL;
+		__alloc_head_ptrs[index] =
+		    alloc_aligned_memory(CHUNK_SIZE, CHUNK_SIZE);
+		ptr = __alloc_head_ptrs[index];
+		if (!ptr) return NULL;
 		memset(ptr, 0, sizeof(ChunkHeader) + BITMAP_SIZE(slab_size));
 		ptr->header.slab_size = slab_size;
 		ptr->header.next = ptr->header.prev = NULL;
+		ptr->header.magic = MAGIC_BYTES;
 		SET_BITMAP(ptr, 0);
 		return BITMAP_PTR(ptr, 0, slab_size);
 	}
@@ -169,6 +184,7 @@ static void *alloc_slab(size_t slab_size) {
 				tmp->header.prev = ptr;
 				tmp->header.next = NULL;
 				tmp->header.slab_size = slab_size;
+				tmp->header.magic = MAGIC_BYTES;
 				ptr = tmp;
 			}
 			continue;
@@ -179,7 +195,34 @@ static void *alloc_slab(size_t slab_size) {
 	return NULL;
 }
 
-void *cgmalloc(size_t size) {
+static void free_slab(void *ptr) {
+	Chunk *chunk;
+	unsigned char *bitmap;
+	size_t index, size, chunk_index, i = 0;
+
+	chunk = (Chunk *)(((size_t)ptr / CHUNK_SIZE) * CHUNK_SIZE);
+	if (chunk->header.magic != MAGIC_BYTES)
+		panic("Memory corruption: MAGIC not correct. Halting!\n");
+	index = BITMAP_INDEX(ptr, chunk);
+	UNSET_BITMAP(chunk, index);
+
+	size = BITMAP_SIZE(chunk->header.slab_size);
+	bitmap = (unsigned char *)((size_t)chunk + sizeof(ChunkHeader));
+	while (i < size)
+		if (bitmap[i++]) return;
+
+	chunk_index = SLAB_INDEX(chunk->header.slab_size);
+	if (__alloc_head_ptrs[chunk_index] == chunk)
+		__alloc_head_ptrs[chunk_index] = chunk->header.next;
+	if (chunk->header.next)
+		chunk->header.next->header.prev = chunk->header.prev;
+	if (chunk->header.prev)
+		chunk->header.prev->header.next = chunk->header.next;
+
+	munmap(chunk, CHUNK_SIZE);
+}
+
+void *alloc(size_t size) {
 	if (size < MAX_SLAB_SIZE) {
 		size_t slab_size = calculate_slab_size(size);
 		return alloc_slab(slab_size);
@@ -190,26 +233,24 @@ void *cgmalloc(size_t size) {
 	}
 }
 
-void cgfree(void *ptr) {
+void release(void *ptr) {
 	void *aligned_ptr;
-
 	if (!ptr) return;
-
 	aligned_ptr = (void *)((size_t)ptr - HEADER_SIZE);
 	if ((size_t)aligned_ptr % CHUNK_SIZE == 0) {
 		size_t actual_size;
-		if (*(size_t *)((size_t)aligned_ptr + sizeof(size_t)) !=
+		if (*(uint64_t *)((size_t)aligned_ptr + sizeof(uint64_t)) !=
 		    MAGIC_BYTES)
 			panic(
 			    "Memory corruption: MAGIC not correct. Halting!\n");
 		actual_size = *(size_t *)aligned_ptr;
 		munmap(aligned_ptr, actual_size);
 	} else {
-		/* TODO: handle slab frees */
+		free_slab(ptr);
 	}
 }
 
 /*
-void *cgcalloc(size_t n, size_t size) { return NULL; }
-void *cgrealloc(void *ptr, size_t size) { return NULL; }
+void *zeroed(size_t n, size_t size) { return NULL; }
+void *resize(void *ptr, size_t size) { return NULL; }
 */

@@ -11,16 +11,16 @@
 /* Size of chunks. All allocations are aligned to this size. This allows for us
  * to quickly find header info about a particular deallocation.
  */
-#define CHUNK_SIZE (4 * 1024)
+#define CHUNK_SIZE (4 * 1024 * 1024)
 
 /* Slab sizes are powers of 2 begining with 8. MAX_SLAB_SIZE is the largest slab
  * size we use. Requests for larger allocations allocation CHUNK_SIZE or more.
  */
 #define MAX_SLAB_SIZE 65536
 
-void *cgmalloc(size_t size);
-void cgfree(void *ptr);
-void *cgcalloc(size_t n, size_t size);
-void *cgrealloc(void *ptr, size_t size);
+void *alloc(size_t size);
+void release(void *ptr);
+void *zeroed(size_t n, size_t size);
+void *resize(void *ptr, size_t size);
 
 #endif /* _CG_MALLOC_H__ */
