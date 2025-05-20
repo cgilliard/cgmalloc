@@ -20,6 +20,12 @@
 #define FALSE 0
 #define MAX_SLAB_PTRS 32
 
+#ifndef TEST
+#define STATIC static
+#else
+#define STATIC
+#endif
+
 #define SET_BITMAP(chunk, index)                                               \
 	do {                                                                   \
 		unsigned char *tmp;                                            \
@@ -100,12 +106,12 @@ struct Chunk {
 Lock __alloc_global_lock = LOCK_INIT;
 Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 
-static void panic(const char *msg) {
+STATIC void panic(const char *msg) {
 	write(2, msg, strlen(msg));
 	exit(-1);
 }
 
-static void *alloc_aligned_memory(size_t size, size_t alignment) {
+STATIC void *alloc_aligned_memory(size_t size, size_t alignment) {
 	void *base, *aligned_ptr, *suffix_start;
 	size_t prefix_size, suffix_size, alloc_size;
 
@@ -127,14 +133,14 @@ static void *alloc_aligned_memory(size_t size, size_t alignment) {
 	return aligned_ptr;
 }
 
-static size_t calculate_slab_size(size_t value) {
+STATIC size_t calculate_slab_size(size_t value) {
 	int leading_zeros;
 	if (value <= 8) return 8;
 	leading_zeros = __builtin_clzll(value - 1);
 	return 1UL << (64 - leading_zeros);
 }
 
-static void *alloc_slab(size_t slab_size) {
+STATIC void *alloc_slab(size_t slab_size) {
 	Chunk *ptr;
 	size_t max = BITMAP_CAPACITY(slab_size);
 	size_t index = SLAB_INDEX(slab_size);
@@ -200,7 +206,7 @@ static void *alloc_slab(size_t slab_size) {
 	return NULL;
 }
 
-static void free_slab(void *ptr) {
+STATIC void free_slab(void *ptr) {
 	Chunk *chunk;
 	uint64_t *bitmap64;
 	unsigned char *bitmap;

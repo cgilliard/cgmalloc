@@ -2,6 +2,9 @@
 #include <criterion/criterion.h>
 #include <stdio.h>
 
+// test functions
+int calculate_slab_size(size_t value);
+
 Test(alloc, alloc1) {
 	size_t last_address;
 	char *test1 = cg_malloc(1000 * 1000 * 5);
@@ -42,4 +45,30 @@ Test(alloc, alloc1) {
 	for (int i = 0; i < size; i++) {
 		cg_free(values[i]);
 	}
+}
+
+Test(alloc, slab_sizes) {
+	cr_assert_eq(calculate_slab_size(1), 8);
+	cr_assert_eq(calculate_slab_size(8), 8);
+	for (size_t i = 9; i <= 16; i++)
+		cr_assert_eq(calculate_slab_size(i), 16);
+	for (size_t i = 17; i <= 32; i++)
+		cr_assert_eq(calculate_slab_size(i), 32);
+	for (size_t i = 33; i <= 64; i++)
+		cr_assert_eq(calculate_slab_size(i), 64);
+
+	for (size_t i = 65; i <= 128; i++)
+		cr_assert_eq(calculate_slab_size(i), 128);
+
+	for (size_t i = 129; i <= 256; i++)
+		cr_assert_eq(calculate_slab_size(i), 256);
+
+	for (size_t i = 257; i <= 512; i++)
+		cr_assert_eq(calculate_slab_size(i), 512);
+
+	for (size_t i = 513; i <= 1024; i++)
+		cr_assert_eq(calculate_slab_size(i), 1024);
+
+	for (size_t i = 1025; i <= 2048; i++)
+		cr_assert_eq(calculate_slab_size(i), 2048);
 }
