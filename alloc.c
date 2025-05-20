@@ -1,6 +1,6 @@
-/* For linux MAP_ANONYMOUS */
-#define _GNU_SOURCE
 #include "alloc.h"
+
+#include "lock.h"
 
 /* For mmap/munmap */
 #include <sys/mman.h>
