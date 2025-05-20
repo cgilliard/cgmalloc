@@ -125,7 +125,7 @@ Chunk *__alloc_head_ptrs[MAX_SLAB_PTRS] = {0};
 			size_t max_words = ((max) + 63) >> 6;              \
 			size_t i;                                          \
 			for (i = 0; i < max_words; i++) {                  \
-				if (bitmap[i] != ~0ULL) {                  \
+				if (bitmap[i] != 0xFFFFFFFFFFFFFFFF) {     \
 					uint64_t word = bitmap[i];         \
 					size_t bit_value =                 \
 					    __builtin_ctzll(~word);        \
