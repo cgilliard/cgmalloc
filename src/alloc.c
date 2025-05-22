@@ -68,11 +68,13 @@
 		    ~(0x1 << (index & 7));                 \
 	} while (FALSE);
 
-#define BITMAP_SIZE(slab_size)                              \
-	((((8 * CHUNK_SIZE - 8 * sizeof(ChunkHeader) - 7) / \
-	   (1 + 8 * (slab_size))) +                         \
-	  7) >>                                             \
-	 3)
+#define BITMAP_SIZE(slab_size)                                \
+	((((((8 * CHUNK_SIZE - 8 * sizeof(ChunkHeader) - 7) / \
+	     (1 + 8 * (slab_size))) +                         \
+	    7) >>                                             \
+	   3) +                                               \
+	  15) &                                               \
+	 ~15)
 
 #define BITMAP_CAPACITY(slab_size) \
 	((8 * CHUNK_SIZE - 8 * sizeof(ChunkHeader) - 7) / (1 + 8 * (slab_size)))
@@ -127,6 +129,7 @@ typedef struct {
 	uint64_t magic;
 #ifndef NO_SPIN_LOCKS
 	Lock lock;
+	unsigned char padding[8];
 #endif /* NO_SPIN_LOCKS */
 } ChunkHeader;
 

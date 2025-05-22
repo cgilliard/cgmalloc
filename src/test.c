@@ -247,3 +247,16 @@ Test(alloc, test_calloc) {
 	for (int i = 0; i < 100; i++) cr_assert_eq(tmp[i], 0);
 	cg_free(tmp);
 }
+
+Test(core, test_align) {
+	size_t alloc_sz = 16;
+	void *x = cg_malloc(8);
+	cr_assert_eq((size_t)x % 8, 0);
+	cg_free(x);
+	for (int i = 0; i < 8; i++) {
+		void *x = cg_malloc(alloc_sz);
+		cr_assert_eq((size_t)x % 16, 0);
+		alloc_sz *= 2;
+		cg_free(x);
+	}
+}
