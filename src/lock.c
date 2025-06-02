@@ -69,11 +69,12 @@ LockGuardImpl lock_write(Lock *lock) {
 	    lock, &state, desired, 0, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
 
 	desired = WFLAG;
+start_loop:
 	do {
 		state = __atomic_load_n(lock, __ATOMIC_ACQUIRE);
 		if (state != WREQUEST) {
 			sched_yield();
-			continue;
+			goto start_loop;
 		}
 
 	} while (!__atomic_compare_exchange_n(
